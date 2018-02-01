@@ -10,6 +10,8 @@ using System.Threading.Tasks;
 using CollateralService.ApiClient.Client.Models.Presentation.Requests.Collateral;
 using System.Configuration;
 using AutoMapper;
+using log4net;
+using BusinessLayer;
 
 namespace GeoCodeApp
 {
@@ -19,6 +21,9 @@ namespace GeoCodeApp
         private readonly ICsvService _csvService;
         private readonly ICollateralServices _collateralService;
         private readonly IGeoCodeService _geoCodeService;
+        private static ILog log = LogManager.GetLogger("LOGGER");
+        private static int countOk = 0;
+        private static int countError = 0;
 
         public WorkflowApp(IAddressServices addressServices, ICsvService csvService, ICollateralServices collateralService, IGeoCodeService geoCodeService)
         {
@@ -32,10 +37,17 @@ namespace GeoCodeApp
         {
             Console.WriteLine($"Application started in {DateTime.Now} ");
             var address = await _addressServices.GetRegistrationAddresses(3147954);
-            Console.WriteLine(TaskStatus.RanToCompletion);
+            Console.WriteLine(new string('-', 20));
 
             var collaterals = await _csvService.ParseCollateralsCsvFile();
-            SetLocationByAddress(collaterals); 
+            Console.WriteLine($"Количество залогов в *.csv: {collaterals?.Count()}");
+
+            SetLocationByAddress(collaterals);
+
+            Console.WriteLine(new string('-', 20));
+            Console.WriteLine($"Successfully: {countOk}   |   Error: {countError}   |   Total: {collaterals?.Count()}");
+            Console.WriteLine($"Application finished in {DateTime.Now} ");
+            Console.ReadKey();
         }
 
         public void SetLocationByAddress(List<CollateralCsvModel> collaterals)
@@ -51,6 +63,11 @@ namespace GeoCodeApp
                             {
                                 Console.WriteLine($"Движемое имущество:  {collateral.TYPE}  -  AgreementId: {collateral.CREDITAGREEMENTID}");
                                 var address = _addressServices.GetRegistrationAddresses(int.Parse(collateral.CREDITAGREEMENTID)).Result;
+                                if (address == null)
+                                {
+                                    Logger.Log.ErrorFormat($"{collateral.COLLATERALID.Replace(" ", "")}    -    {collateral.CREDITAGREEMENTID}    -    {collateral.TYPE}    -   {address}");
+                                    countError++;
+                                }
                                 if (address != null)
                                 {
                                     string addressBuild = ((address.Region != "") ? $"{address.Region}, " : "")
@@ -58,8 +75,11 @@ namespace GeoCodeApp
                                         + ((address.Street != "") ? $"{address.Street} " : "")
                                         + ((address.Flat != "") ? $"{address.Flat}" : "");
 
-                                    var locationDto = GetGeoCode(addressBuild, collateral.COLLATERALID);
-
+                                    var locationDto = GetGeoCode(addressBuild, collateral.COLLATERALID, collateral.CREDITAGREEMENTID, collateral.TYPE);
+                                    if (locationDto == null)
+                                    {
+                                        countError++;
+                                    }
                                     if (locationDto != null)
                                     {
                                         locationDto.Address = addressBuild;
@@ -68,10 +88,12 @@ namespace GeoCodeApp
                                         try
                                         {
                                             _collateralService.PostLocationAsync(collateral.COLLATERALID, location);
+                                            countOk++;
                                         }
                                         catch (Exception ex)
                                         {
                                             Console.WriteLine(ex.Message);
+                                            countError++;
                                         }
                                     }
                                 }
@@ -90,7 +112,11 @@ namespace GeoCodeApp
                                     + ((collateral.STREET != "") ? $"{collateral.STREET} " : "")
                                     + ((collateral.HOUSE != "") ? $"{collateral.HOUSE}" : "");
 
-                                var locationDto = GetGeoCode(addressBuild, collateral.COLLATERALID);
+                                var locationDto = GetGeoCode(addressBuild, collateral.COLLATERALID, collateral.CREDITAGREEMENTID, collateral.TYPE);
+                                if (locationDto == null)
+                                {
+                                    countError++;
+                                }
 
                                 if (locationDto != null)
                                 {
@@ -100,10 +126,12 @@ namespace GeoCodeApp
                                     try
                                     {
                                         _collateralService.PostLocationAsync(collateral.COLLATERALID, location);
+                                        countOk++;
                                     }
                                     catch (Exception ex)
                                     {
                                         Console.WriteLine(ex.Message);
+                                        countError++;
                                     }
                                 }
                             }
@@ -113,10 +141,10 @@ namespace GeoCodeApp
             }
         }
 
-        public Model.Location GetGeoCode(string address, string collateralId)
+        public Model.Location GetGeoCode(string address, string collateralId, string creditagreemId, string type)
         {
             string apiKey = ConfigurationManager.AppSettings["GoogleApiKey"];
-            var data = _geoCodeService.GetGeoCode(address, collateralId, apiKey);
+            var data = _geoCodeService.GetGeoCode(address, collateralId, apiKey, creditagreemId, type);
 
             var addressDto = data?.ToObject<Model.Location>();
             return addressDto;

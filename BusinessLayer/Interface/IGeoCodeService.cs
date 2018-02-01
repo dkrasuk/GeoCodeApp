@@ -9,6 +9,6 @@ namespace BusinessLayer.Interface
 {
     public interface IGeoCodeService
     {
-        JObject GetGeoCode(string address, string collateralId, string apiKey);
+        JObject GetGeoCode(string address, string collateralId, string apiKey, string creditagreemId, string type);
     }
 }

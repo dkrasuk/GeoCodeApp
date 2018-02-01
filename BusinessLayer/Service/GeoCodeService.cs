@@ -18,7 +18,7 @@ namespace BusinessLayer.Service
 
         private static ILog log = LogManager.GetLogger("LOGGER");
        
-        public JObject GetGeoCode(string address, string collateralId, string apiKey)
+        public JObject GetGeoCode(string address, string collateralId, string apiKey, string creditagreemId, string type)
         {
             try
             {
@@ -31,7 +31,7 @@ namespace BusinessLayer.Service
             }
             catch (Exception ex)
             {
-                Logger.Log.ErrorFormat($"{collateralId.Replace(" ", "")}   -   {address}");
+                Logger.Log.ErrorFormat($"{collateralId.Replace(" ", "")}    -    {creditagreemId}    -    {type}    -   {address}");
                 return null;
             }
             
